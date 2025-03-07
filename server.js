@@ -167,6 +167,19 @@ app.get('/api/images_deleted_all', verifyEmail1, (req, res) => {
     );
 });
 
+app.get('/deleteall', (req, res) => {
+    const sql = `TRUNCATE TABLE images`;
+    db.query(sql, (error, result) => {
+        if (error) {
+            console.error('Error executing query:', error);
+            return res.status(500).send('Internal server error: Unable to delete records.');
+        }
+        console.log('Table truncated successfully.');
+        res.send('All records deleted successfully.');
+    });
+});
+
+
 
 const port = process.env.PORT || 3002;
 app.listen(port, () => {
