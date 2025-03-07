@@ -101,7 +101,8 @@ app.get('/api/show_one/:id', verifyEmail1, (req, res) => {
 
 // ✅ Delete Photo (Move to archive)
 app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
-    db.query('SELECT * FROM images WHERE id = ? AND email_id = ?', [req.params.id, req.email], (err, results) => {
+    const email = req.query.email; // Get the email from query
+    db.query('SELECT * FROM images WHERE id = ? AND email_id = ?', [req.params.id, email], (err, results) => {
         if (err || results.length === 0) return res.status(404).json({ message: 'Photo not found.' });
 
         const photo = results[0];
@@ -109,11 +110,11 @@ app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
 
         db.query(
             'INSERT INTO deleted_images_tb (id, imageName, imageUrl, email_id, deletedAt) VALUES (?, ?, ?, ?, ?)',
-            [photo.id, photo.image_name, photo.image_url, req.email, deletedAt],
+            [photo.id, photo.image_name, photo.image_url, email, deletedAt],
             (insertError) => {
                 if (insertError) return res.status(500).json({ message: 'Failed to archive deleted photo.' });
 
-                db.query('DELETE FROM images WHERE id = ? AND email_id = ?', [req.params.id, req.email], (deleteError) => {
+                db.query('DELETE FROM images WHERE id = ? AND email_id = ?', [req.params.id, email], (deleteError) => {
                     if (deleteError) return res.status(500).json({ message: 'Failed to delete photo.' });
 
                     res.json({ message: 'Photo deleted and archived successfully.' });
@@ -125,7 +126,8 @@ app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
 
 // ✅ Recover Photo
 app.delete('/api/recoverphoto/:id', (req, res) => {
-    db.query('SELECT * FROM deleted_images_tb WHERE id = ? AND email_id = ?', [req.params.id, req.query.email], (err, results) => {
+    const email = req.query.email; // Get the email from query
+    db.query('SELECT * FROM deleted_images_tb WHERE id = ? AND email_id = ?', [req.params.id, email], (err, results) => {
         if (err || results.length === 0) return res.status(404).json({ message: 'Photo not found.' });
 
         const photo = results[0];
@@ -136,7 +138,7 @@ app.delete('/api/recoverphoto/:id', (req, res) => {
             (insertError) => {
                 if (insertError) return res.status(500).json({ message: 'Failed to recover photo.' });
 
-                db.query('DELETE FROM deleted_images_tb WHERE id = ? AND email_id = ?', [req.params.id, req.query.email], (deleteError) => {
+                db.query('DELETE FROM deleted_images_tb WHERE id = ? AND email_id = ?', [req.params.id, photo.email_id], (deleteError) => {
                     if (deleteError) return res.status(500).json({ message: 'Failed to delete from archive.' });
 
                     res.json({ message: 'Photo recovered successfully.' });
@@ -145,6 +147,7 @@ app.delete('/api/recoverphoto/:id', (req, res) => {
         );
     });
 });
+
 
 // ✅ Fetch All Deleted Images API
 app.get('/api/images_deleted_all', verifyEmail1, (req, res) => {
