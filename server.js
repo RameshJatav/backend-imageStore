@@ -100,7 +100,7 @@ app.get('/api/show_one/:id', verifyEmail1, (req, res) => {
 });
 
 // ✅ Delete Photo (Move to archive)
-app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
+app.delete('/api/deletephoto/:id', (req, res) => {
     db.query('SELECT * FROM images WHERE id = ? AND email_id = ?', [req.params.id, req.email], (err, results) => {
         if (err || results.length === 0) return res.status(404).json({ message: 'Photo not found.' });
 
@@ -146,7 +146,6 @@ app.delete('/api/recoverphoto/:id', (req, res) => {
     });
 });
 
-// ✅ Start Server
 const port = process.env.PORT || 3002;
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);

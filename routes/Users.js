@@ -209,7 +209,7 @@ router.post("/user_register", async (req, res) => {
         db.query(query, [ email_id, hashedPassword, currentDate], (error, result) => {
             if (error) {
                 console.error(error);
-                return res.status(500).json({ message: "Database error." });
+                return res.status(500).json({ message: "Internal server error." });
             }
             res.status(201).json({ message: "User registered successfully." });
         });
@@ -233,7 +233,7 @@ router.post("/user_login", (req, res) => {
         db.query(query, [email_id], async (error, rows) => {
             if (error) {
                 console.error(error);
-                return res.status(500).json({ message: "Database error." });
+                return res.status(500).json({ message: "Internal server error." });
             }
 
             if (rows.length === 0) {
@@ -245,7 +245,7 @@ router.post("/user_login", (req, res) => {
             // Compare the password
             const isPasswordMatch = await bcrypt.compare(password, user.password);
             if (!isPasswordMatch) {
-                return res.status(401).json({ message: "Invalid credentials." });
+                return res.status(401).json({ message: "Invalid email or Password !." });
             }
 
             res.status(200).json({ message: "Login successful.", user });
