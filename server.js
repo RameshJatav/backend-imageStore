@@ -100,7 +100,7 @@ app.get('/api/show_one/:id', verifyEmail1, (req, res) => {
 });
 
 // ✅ Delete Photo (Move to archive)
-app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
+app.delete('/api/deletephoto/:id', (req, res) => {
     const email = req.query.email; // Get the email from query
     db.query('SELECT * FROM images WHERE id = ? AND email_id = ?', [req.params.id, email], (err, results) => {
         if (err || results.length === 0) return res.status(404).json({ message: 'Photo not found.' });
