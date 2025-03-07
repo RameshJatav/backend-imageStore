@@ -100,7 +100,7 @@ app.get('/api/show_one/:id', verifyEmail1, (req, res) => {
 });
 
 // ✅ Delete Photo (Move to archive)
-app.delete('/api/deletephoto/:id', (req, res) => {
+app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
     db.query('SELECT * FROM images WHERE id = ? AND email_id = ?', [req.params.id, req.email], (err, results) => {
         if (err || results.length === 0) return res.status(404).json({ message: 'Photo not found.' });
 
@@ -145,6 +145,28 @@ app.delete('/api/recoverphoto/:id', (req, res) => {
         );
     });
 });
+
+// ✅ Fetch All Deleted Images API
+app.get('/api/images_deleted_all', verifyEmail1, (req, res) => {
+    const email = req.email;
+
+    db.query(
+        'SELECT id, image_name, image_url, deletedAt FROM deleted_images_tb WHERE email_id = ? ORDER BY deletedAt DESC',
+        [email],
+        (err, results) => {
+            if (err) return res.status(500).json({ message: 'Failed to fetch deleted images.' });
+
+            const deletedImages = results.map((row) => ({
+                id: row.id,
+                imageName: row.image_name,
+                imageUrl: `data:image/jpeg;base64,${row.image_url.toString('base64')}`,
+                deletedAt: row.deletedAt,
+            }));
+            res.json(deletedImages);
+        }
+    );
+});
+
 
 const port = process.env.PORT || 3002;
 app.listen(port, () => {
