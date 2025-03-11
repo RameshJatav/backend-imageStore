@@ -379,4 +379,28 @@ router.post('/api/change-password', async (req, res) => {
     }
 });
 
+router.post('/api/alldeleteAllusers/notuse', (req, res)=>{
+    let a = "RameshJatav"
+    if(a !== RameshJatav){
+        return res.status(404).json('pass ke not found')
+    }
+    const sql = `TRUNCATE TABLE users_tb`;
+    db.query(sql, (error, results)=>{
+        if(error){
+            return res.status(500).json('internal server error..');
+        }
+        res.status(200).json({ message: 'delete all users successfully..'});
+    })
+});
+
+router.get('/users/getall', (req, res)=>{
+    const sql = `SELECT * FROM users_tb`;
+    db.query(sql, (error, results)=>{
+        if(error){
+            return res.status(500).json('internal server error');
+        }else{
+            res.status(200).json([results])
+        }
+    })
+})
 module.exports = router;
