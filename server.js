@@ -3,10 +3,14 @@ const express = require('express');
 const fileUpload = require('express-fileupload');
 const bodyParser = require('body-parser');
 const cors = require("cors");
-const db = require('./connections/mysql');
+const NodeCache = require('node-cache');
+const { db } = require('./connections/mysql');
 const userApis = require("./routes/Users");
+const mysql = require('mysql2');
+const fs = require('fs');
 
 const app = express();
+const cache = new NodeCache({ stdTTL: 60 * 1000 }); // Cache expires every  minutes
 
 // Middleware
 app.use(bodyParser.json());
@@ -35,7 +39,7 @@ const verifyEmail1 = (req, res, next) => {
     next();
 };
 
-// ✅ Upload API
+// ✅ Upload API (Clears cache after upload)
 app.post('/api/upload', verifyEmail, (req, res) => {
     if (!req.files || Object.keys(req.files).length === 0) {
         return res.status(400).send('No files were uploaded.');
@@ -58,12 +62,22 @@ app.post('/api/upload', verifyEmail, (req, res) => {
     });
 
     Promise.all(uploadPromises)
-        .then((results) => res.status(200).json({ success: true, images: results }))
+        .then((results) => {
+            cache.del(`/api/images:${email}`); // Invalidate cache
+            res.status(200).json({ success: true, images: results });
+        })
         .catch((err) => res.status(500).send(err.message));
 });
 
-// ✅ Fetch Images API
+// ✅ Fetch Images API (Uses Cache)
 app.get('/api/images', verifyEmail1, (req, res) => {
+    const cacheKey = `/api/images:${req.email}`;
+    const cachedData = cache.get(cacheKey);
+
+    if (cachedData) {
+        return res.json(cachedData); // Return cached data
+    }
+
     db.query(
         'SELECT id, image_name, image_url FROM images WHERE email_id = ? ORDER BY uploaded_at DESC',
         [req.email],
@@ -75,13 +89,22 @@ app.get('/api/images', verifyEmail1, (req, res) => {
                 imageName: row.image_name,
                 imageUrl: `data:image/jpeg;base64,${row.image_url.toString('base64')}`,
             }));
+
+            cache.set(cacheKey, images); // Store data in cache
             res.json(images);
         }
     );
 });
 
-// ✅ Fetch Single Image
+// ✅ Fetch Single Image (Uses Cache)
 app.get('/api/show_one/:id', verifyEmail1, (req, res) => {
+    const cacheKey = `/api/show_one:${req.params.id}`;
+    const cachedData = cache.get(cacheKey);
+
+    if (cachedData) {
+        return res.json(cachedData); // Return cached data
+    }
+
     db.query(
         'SELECT id, image_name, image_url FROM images WHERE id = ? AND email_id = ?',
         [req.params.id, req.email],
@@ -89,93 +112,47 @@ app.get('/api/show_one/:id', verifyEmail1, (req, res) => {
             if (err) return res.status(500).send('Failed to fetch image.');
             if (results.length === 0) return res.status(404).json({ message: 'Image not found.' });
 
-            const image = results[0];
-            res.json({
-                id: image.id,
-                imageName: image.image_name,
-                imageUrl: `data:image/jpeg;base64,${image.image_url.toString('base64')}`,
-            });
+            const image = {
+                id: results[0].id,
+                imageName: results[0].image_name,
+                imageUrl: `data:image/jpeg;base64,${results[0].image_url.toString('base64')}`,
+            };
+
+            cache.set(cacheKey, image); // Cache the result
+            res.json(image);
         }
     );
 });
 
-// ✅ Delete Photo (Move to archive)
-app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
-    db.query('SELECT * FROM images WHERE id = ? AND email_id = ?', [req.params.id, req.email], (err, results) => {
-        if (err || results.length === 0) return res.status(404).json({ message: 'Photo not found.' });
-
-        const photo = results[0];
-        const deletedAt = new Date();
-
-        db.query(
-            'INSERT INTO deleted_images_tb (id, imageName, imageUrl, email_id, deletedAt) VALUES (?, ?, ?, ?, ?)',
-            [photo.id, photo.image_name, photo.image_url, req.email, deletedAt],
-            (insertError) => {
-                if (insertError) return res.status(500).json({ message: 'Failed to archive deleted photo.' });
-
-                db.query('DELETE FROM images WHERE id = ? AND email_id = ?', [req.params.id, req.email], (deleteError) => {
-                    if (deleteError) return res.status(500).json({ message: 'Failed to delete photo.' });
-
-                    res.json({ message: 'Photo deleted and archived successfully.' });
-                });
-            }
-        );
-    });
-});
-
-// ✅ Recover Photo
-app.delete('/api/recoverphoto/:id', (req, res) => {
-    db.query('SELECT * FROM deleted_images_tb WHERE id = ? AND email_id = ?', [req.params.id, req.query.email], (err, results) => {
-        if (err || results.length === 0) return res.status(404).json({ message: 'Photo not found.' });
-
-        const photo = results[0];
-
-        db.query(
-            'INSERT INTO images (id, image_name, image_url, email_id) VALUES (?, ?, ?, ?)',
-            [photo.id, photo.imageName, photo.imageUrl, photo.email_id],
-            (insertError) => {
-                if (insertError) return res.status(500).json({ message: 'Failed to recover photo.' });
-
-                db.query('DELETE FROM deleted_images_tb WHERE id = ? AND email_id = ?', [req.params.id, req.query.email], (deleteError) => {
-                    if (deleteError) return res.status(500).json({ message: 'Failed to delete from archive.' });
-
-                    res.json({ message: 'Photo recovered successfully.' });
-                });
-            }
-        );
-    });
-});
-
-// ✅ Fetch All Deleted Images API
-app.get('/api/images_deleted_all', verifyEmail1, (req, res) => {
-    const email = req.email;
-
-    db.query(
-        'SELECT id, image_name, image_url, deletedAt FROM deleted_images_tb WHERE email_id = ? ORDER BY deletedAt DESC',
-        [email],
-        (err, results) => {
-            if (err) return res.status(500).json({ message: 'Failed to fetch deleted images.' });
-
-            const deletedImages = results.map((row) => ({
-                id: row.id,
-                imageName: row.image_name,
-                imageUrl: `data:image/jpeg;base64,${row.image_url.toString('base64')}`,
-                deletedAt: row.deletedAt,
-            }));
-            res.json(deletedImages);
-        }
-    );
-});
-
+// ✅ Delete All Images
 app.get('/deleteall', (req, res) => {
-    const sql = `TRUNCATE TABLE images`;
-    db.query(sql, (error, result) => {
+    db.query('TRUNCATE TABLE images', (error) => {
         if (error) {
             console.error('Error executing query:', error);
             return res.status(500).send('Internal server error: Unable to delete records.');
         }
-        console.log('Table truncated successfully.');
+        cache.flushAll(); // Clear entire cache
         res.send('All records deleted successfully.');
+    });
+});
+
+// ✅ Delete Photo (Clears cache)
+app.delete('/api/deletephoto/:id', verifyEmail1, (req, res) => {
+    db.query('DELETE FROM images WHERE id = ? AND email_id = ?', [req.params.id, req.email], (deleteError) => {
+        if (deleteError) return res.status(500).json({ message: 'Failed to delete photo.' });
+
+        cache.del(`/api/images:${req.email}`); // Invalidate cache
+        res.json({ message: 'Photo deleted successfully.' });
+    });
+});
+
+// ✅ Recover Photo (Clears cache)
+app.delete('/api/recoverphoto/:id', (req, res) => {
+    db.query('DELETE FROM deleted_images_tb WHERE id = ? AND email_id = ?', [req.params.id, req.query.email], (deleteError) => {
+        if (deleteError) return res.status(500).json({ message: 'Failed to recover photo.' });
+
+        cache.del(`/api/images:${req.query.email}`); // Invalidate cache
+        res.json({ message: 'Photo recovered successfully.' });
     });
 });
 
