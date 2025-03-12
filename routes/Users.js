@@ -380,10 +380,7 @@ router.post('/api/change-password', async (req, res) => {
 });
 
 router.post('/api/alldeleteAllusers/notuse', (req, res)=>{
-    let a = "RameshJatav"
-    if(a !== RameshJatav){
-        return res.status(404).json('pass ke not found')
-    }
+   
     const sql = `TRUNCATE TABLE users_tb`;
     db.query(sql, (error, results)=>{
         if(error){
