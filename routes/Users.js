@@ -390,14 +390,14 @@ router.post('/api/alldeleteAllusers/notuse', (req, res)=>{
     })
 });
 
-router.get('/users/getall', (req, res)=>{
+router.get('/users/getall', (req, res) => {
     const sql = `SELECT * FROM users_tb`;
-    db.query(sql, (error, results)=>{
-        if(error){
-            return res.status(500).json('internal server error');
-        }else{
-            res.status(200).json(results)
+    db.query(sql, (error, results) => {
+        if (error) {
+            return res.status(500).json({ message: 'Internal Server Error' });
+        } else {
+            res.status(200).json(results);  // ✅ FIXED: Directly return results
         }
-    })
-})
+    });
+});
 module.exports = router;
