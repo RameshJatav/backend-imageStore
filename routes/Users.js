@@ -396,7 +396,7 @@ router.get('/users/getall', (req, res)=>{
         if(error){
             return res.status(500).json('internal server error');
         }else{
-            res.status(200).json([results])
+            res.status(200).json(results)
         }
     })
 })
